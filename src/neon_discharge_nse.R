@@ -79,7 +79,7 @@ ediData <- EDIutils::read_data_package_archive(package_id,
 unzip(paste0("./data/",package_id,".zip"),
       exdir=paste0("./data/",package_id),
       overwrite = T)
-csd_PROVISIONAL <- read.csv("C:/Users/nickerson/Downloads/csd_continuousDischarge_PROVISIONAL_20231001_20240930 (1).csv",
+csd_PROVISIONAL <- read.csv("csd_continuousDischarge_PROVISIONAL_20231001_20240930.csv",
                             encoding = "UTF-8",
                             header = T)
 dsc_PROVISIONAL <- read.csv(paste0("./data/",
