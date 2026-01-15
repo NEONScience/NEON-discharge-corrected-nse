@@ -18,7 +18,7 @@
 #' @return 
 
 # changelog and author contributions / copyrights
-#   Zachary Nickerson (2025-10-03)
+#   Zachary Nickerson (2026-01-14)
 #     original creation
 ##############################################################################################
 
@@ -26,18 +26,15 @@
 library(neonUtilities)
 library(tidyverse)
 library(hydroGOF)
-library(EDIutils)
 library(cowplot)
 
 # Set options ####
-options(stringsAsFactors=F,
-        HTTPUserAgent="EDI_CodeGen")
+options(stringsAsFactors=F)
 
 # Set constants ####
 queryStartDate <- "2021-10" # Beginning of WY 2022
-queryEndDate <- "2023-09" # End of WY 2024
-queryRelease <- "RELEASE-2025"
-secondsIn7p5Min <- 60*7.5
+queryendDateTime <- "2023-09" # End of WY 2024
+queryRelease <- "RELEASE-2026"
 
 # Create subdirectories if they do not exist ####
 if(!dir.exists("./data")){dir.create("./data")}
@@ -52,9 +49,10 @@ csd <-neonUtilities::loadByProduct(dpID="DP4.00130.001",
                                    check.size = F,
                                    package='basic')
 
-# # Save downloaded data as RDS for quicker access in future runs
-# saveRDS(csd,"./data/NEON.DP4.00130.001_RELEASED.rds")
-# # If data is saved locally, read it in
+# Save downloaded data as RDS for quicker access in future runs
+saveRDS(csd,"./data/NEON.DP4.00130.001_RELEASED.rds")
+
+# If data is saved locally, read it in
 # csd <- readRDS("./data/NEON.DP4.00130.001_RELEASED.rds")
 
 # Download RELEASED field discharge data ####
@@ -66,83 +64,45 @@ dsc <-neonUtilities::loadByProduct(dpID="DP1.20048.001",
                                    check.size = F,
                                    package='basic')
 
-# # Save downloaded data as RDS for quicker access in future runs
-# saveRDS(dsc,"./data/NEON.DP1.20048.001_RELEASED.rds")
-# # If data is saved locally, read it in
+# Save downloaded data as RDS for quicker access in future runs
+saveRDS(dsc,"./data/NEON.DP1.20048.001_RELEASED.rds")
+
+# If data is saved locally, read it in
 # dsc <- readRDS("./data/NEON.DP1.20048.001_RELEASED.rds")
 
-# Download static PROVISIONAL published in EDI ####
-# Package ID for https://doi.org/10.6073/pasta/db08f7417cfffc20179b9019dc9b7f32
-package_id <- "edi.2177.1" 
-ediData <- EDIutils::read_data_package_archive(package_id, 
-                                               path = "./data")
-unzip(paste0("./data/",package_id,".zip"),
-      exdir=paste0("./data/",package_id),
-      overwrite = T)
-csd_PROVISIONAL <- read.csv(paste0("./data/",
-                                   package_id,
-                                   "csd_continuousDischarge_PROVISIONAL_20231001_20240930.csv"),
-                            encoding = "UTF-8",
-                            header = T)
-dsc_PROVISIONAL <- read.csv(paste0("./data/",
-                                   package_id,
-                                   "/dsc_fieldData_PROVISIONAL_20231001_20240930.csv"),
-                            encoding = "UTF-8",
-                            header = T)
+# Unpack the modeled and field discharge data frames ####
+csd_15_min <- csd$csd_15_min
+dsc_fieldData <- dsc$dsc_fieldData
 
-# Format dates in PROVISIONAL data ####
-csd_PROVISIONAL$endDate <- as.POSIXct(csd_PROVISIONAL$endDate,
-                                      tz="UTC",
-                                      format="%Y-%m-%d %H:%M:%S")
-dsc_PROVISIONAL$endDate <- as.POSIXct(dsc_PROVISIONAL$collectDate,
-                                      tz="UTC",
-                                      format="%Y-%m-%d %H:%M:%S")
+# Subset out TOMB from field discharge records ####
+dsc_fieldData <- dsc_fieldData[dsc_fieldData$siteID!="TOMB",]
 
-# Bind RELEASED and PROVISIONAL data ####
-gc() # Clear out any unused space in the environment
-csd_continuousDischarge <- rbind(csd$csd_continuousDischarge,
-                                 csd_PROVISIONAL)
-dsc_fieldData <- merge(dsc$dsc_fieldData,
-                       dsc_PROVISIONAL,
-                       all=T)
-
-# Calculate 15-min mean continuous discharge for each dsc_fieldData record ####
-dsc_fieldData$meanContQ<-NA
+# Associate the nearest modeled discharge value to each field record ####
+dsc_fieldData$modeledQ <- NA
 for(i in 1:nrow(dsc_fieldData)){
-  # Get a 15 minute time span centered around the collect date
-  fieldQPlus<-dsc_fieldData$collectDate[i]+secondsIn7p5Min
-  fieldQMinus<-dsc_fieldData$collectDate[i]-secondsIn7p5Min
-  
-  if(dsc_fieldData$siteID[i]!="TOOK"){
-    # For all sites with 1 location, match records by siteID
-    dsc_fieldData$meanContQ[i] <- mean(
-      csd_continuousDischarge$continuousDischarge[
-        csd_continuousDischarge$siteID == dsc_fieldData$siteID[i]
-        &csd_continuousDischarge$endDate >= fieldQMinus
-        &csd_continuousDischarge$endDate <= fieldQPlus
-      ],
-      na.rm = T)
+  # Subset modeled discharge by location
+  if(dsc_fieldData$namedLocation[i]=="TOOK.AOS.discharge.inflow"){
+    csd_15_min_loc <- csd_15_min[csd_15_min$siteID=="TOOK"
+                                 &csd_15_min$horizontalPosition=="150",]
   }else{
-    # For Toolik Lake (D18), match by namedLocation and curveID
-    if(dsc_fieldData$namedLocation[i]=="TOOK.AOS.discharge.inflow"){
-      dsc_fieldData$meanContQ[i] <- mean(
-        csd_continuousDischarge$continuousDischarge[
-          grepl("TKIN",csd_continuousDischarge$curveID)
-          &csd_continuousDischarge$endDate >= fieldQMinus
-          &csd_continuousDischarge$endDate <= fieldQPlus
-        ],
-        na.rm = T)      
-    }
     if(dsc_fieldData$namedLocation[i]=="TOOK.AOS.discharge.outflow"){
-      dsc_fieldData$meanContQ[i] <- mean(
-        csd_continuousDischarge$continuousDischarge[
-          grepl("TKOT",csd_continuousDischarge$curveID)
-          &csd_continuousDischarge$endDate >= fieldQMinus
-          &csd_continuousDischarge$endDate <= fieldQPlus
-        ],
-        na.rm = T)      
+      csd_15_min_loc <- csd_15_min[csd_15_min$siteID=="TOOK"
+                                   &csd_15_min$horizontalPosition=="160",]
+    }else{
+      csd_15_min_loc <- csd_15_min[csd_15_min$siteID==dsc_fieldData$siteID[i],]
     }
   }
+  
+  # Get nearest modeled discharge value
+  dsc_fieldData$modeledQ[i] <- csd_15_min_loc$dischargeContinuous[
+    csd_15_min_loc$startDateTime==csd_15_min_loc$startDateTime[
+      which.min(abs(difftime(csd_15_min_loc$startDateTime,
+                             dsc_fieldData$collectDate[i],
+                             units = "secs")
+                    )
+                )
+      ]
+    ]
 }
 
 # Plot of field vs. continuous discharge relationship for each location ####
@@ -170,11 +130,11 @@ dsc_fieldData$plotLabel[
   for (lbl in labels) {
     df_sub <- dsc_fieldData[dsc_fieldData$plotLabel == lbl, ]
     df_sub <- df_sub[is.finite(df_sub$finalDischarge)
-                     &is.finite(df_sub$meanContQ),]
+                     &is.finite(df_sub$modeledQ),]
     if (nrow(df_sub) > 0) {
       # Calculate min/max for both axes for this plot only
       plot_x <- df_sub$finalDischarge
-      plot_y <- df_sub$meanContQ
+      plot_y <- df_sub$modeledQ
       axis_min <- min(c(plot_x, plot_y), na.rm = TRUE)
       axis_max <- max(c(plot_x, plot_y), na.rm = TRUE)
       axis_mid <- (axis_min + axis_max) / 2
@@ -186,7 +146,7 @@ dsc_fieldData$plotLabel[
       axis_lim_min <- axis_min - buffer
       axis_lim_max <- axis_max + buffer
   
-      p <- ggplot2::ggplot(df_sub,aes(x = finalDischarge, y = meanContQ)) +
+      p <- ggplot2::ggplot(df_sub,aes(x = finalDischarge, y = modeledQ)) +
         ggplot2::geom_point(size = 2, alpha = 0.7, color = "#0072B2") +
         ggplot2::geom_smooth(method = "lm", se = TRUE, color = "#D55E00", 
                              linetype = "solid", size = 1) +
@@ -250,17 +210,16 @@ ggplot2::ggsave("./out/discharge_fig.png",plot = qRelPlot,
 
 # Generate summary table with statistics for each location ####
 summaryDF <- dsc_fieldData%>%
-  dplyr::filter(siteID!="TOMB")%>%
   dplyr::mutate(siteID_loc=gsub("^D[0-9]{2}\\-","",plotLabel))%>%
   dplyr::group_by(siteID_loc)%>%
   dplyr::summarise(
-    NSE=round(hydroGOF::NSE(meanContQ,finalDischarge,
-                            na.rm=TRUE,fun=NULL,
-                            epsilon.type = "none", epsilon.value = NA),
-              digits=2),
-    Slope=round(summary(lm(meanContQ~finalDischarge))$coefficients[2,1],
+    NSE=abs(round(hydroGOF::NSE(modeledQ,finalDischarge,
+                                na.rm=TRUE,fun=NULL,
+                                epsilon.type = "none", epsilon.value = NA),
+                  digits=2)),
+    Slope=round(summary(lm(modeledQ~finalDischarge))$coefficients[2,1],
                 digits=2),
-    R2=round(summary(lm(meanContQ~finalDischarge))$r.squared,
+    R2=round(summary(lm(modeledQ~finalDischarge))$r.squared,
              digits=2)
   )
 summaryDF$perGap <- NA
@@ -275,10 +234,10 @@ for(i in 1:nrow(summaryDF)){
     }
   }
   summaryDF$perGap[i] <- round(
-    sum(is.na(csd_continuousDischarge$continuousDischarge[
-      grepl(curveIDSite,csd_continuousDischarge$curveID)]))/
-      nrow(csd_continuousDischarge[
-        grepl(curveIDSite,csd_continuousDischarge$curveID),])
+    sum(is.na(csd_15_min$dischargeContinuous[
+      grepl(curveIDSite,csd_15_min$curveID)]))/
+      nrow(csd_15_min[
+        grepl(curveIDSite,csd_15_min$curveID),])
   ,digits = 2)
 }
 
@@ -291,9 +250,10 @@ geo <-neonUtilities::loadByProduct(dpID="DP4.00131.001",
                                    check.size = F,
                                    package='basic')
 
-# # Save downloaded data as RDS for quicker access in future runs
-# saveRDS(geo,"./data/NEON.DP4.00131.001_RELEASED.rds")
-# # If data is saved locally, read it in
+# Save downloaded data as RDS for quicker access in future runs
+saveRDS(geo,"./data/NEON.DP4.00131.001_RELEASED.rds")
+
+# If data is saved locally, read it in
 # geo <- readRDS("./data/NEON.DP4.00131.001_RELEASED.rds")
 
 # Assign the most recent slope value to each site ####
@@ -321,14 +281,15 @@ sdrc <-neonUtilities::loadByProduct(dpID="DP4.00133.001",
                                     check.size = F,
                                     package='basic')
 
-# # Save downloaded data as RDS for quicker access in future runs
-# saveRDS(sdrc,"./data/NEON.DP4.00133.001_RELEASED.rds")
-# # If data is saved locally, read it in
+# Save downloaded data as RDS for quicker access in future runs
+saveRDS(sdrc,"./data/NEON.DP4.00133.001_RELEASED.rds")
+
+# If data is saved locally, read it in
 # sdrc <- readRDS("./data/NEON.DP4.00133.001_RELEASED.rds")
 
 # Assign the most recent slope value to each site ####
 sdrc_controlType <- sdrc$sdrc_controlType
-sdrc_controlType$siteID_loc <- sdrc_controlType$siteID
+sdrc_controlType$siteID_loc <- gsub("\\..*$","",sdrc_controlType$namedLocation)
 sdrc_controlType$siteID_loc[
   grepl("inflow",sdrc_controlType$namedLocation)
 ] <- "TOOK-IN"
@@ -383,6 +344,6 @@ summaryDF$watershedArea[summaryDF$siteID_loc=='FLNT'] <- 14999
 summaryDF$watershedArea[summaryDF$siteID_loc=='BLWA'] <- 16159
 
 # Write out the table ####
-write.csv(summaryDF,"out/discharge_table.csv",row.names = F)
+write.csv(summaryDF,"out/discharge_table_v2.csv",row.names = F)
 
 # End
