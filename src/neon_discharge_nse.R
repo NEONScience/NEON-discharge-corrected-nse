@@ -1,6 +1,6 @@
 ##############################################################################################
-#' @title CALCULATE NASH-SUTCLIFFE EFFICIENCIES AND REGRESSION COEFFICIENTS FOR 
-#' CORRECTED NEON DISCHARGE DATA
+#' @title CALCULATE NASH-SUTCLIFFE EFFICIENCIES (NSE) AND REGRESSION 
+#' COEFFICIENTS FOR CORRECTED NEON DISCHARGE DATA
 
 #' @author
 #' Zachary Nickerson \email{nickerson@battelleecology.org} \cr
@@ -29,6 +29,8 @@
 # changelog and author contributions / copyrights
 #   Zachary Nickerson (2026-01-14)
 #     original creation
+#   Zachary Nickerson (2026-01-26)
+#     script run with static RELEASE-2026 data
 ##############################################################################################
 
 # Load libraries ####
