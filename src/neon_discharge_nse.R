@@ -33,7 +33,7 @@ options(stringsAsFactors=F)
 
 # Set constants ####
 queryStartDate <- "2021-10" # Beginning of WY 2022
-queryendDateTime <- "2023-09" # End of WY 2024
+queryEndDate <- "2023-09" # End of WY 2024
 queryRelease <- "RELEASE-2026"
 
 # Create subdirectories if they do not exist ####
@@ -50,10 +50,10 @@ csd <-neonUtilities::loadByProduct(dpID="DP4.00130.001",
                                    package='basic')
 
 # Save downloaded data as RDS for quicker access in future runs
-saveRDS(csd,"./data/NEON.DP4.00130.001_RELEASED.rds")
+saveRDS(csd,paste0("./data/NEON.DP4.00130.001_",queryRelease,".rds"))
 
 # If data is saved locally, read it in
-# csd <- readRDS("./data/NEON.DP4.00130.001_RELEASED.rds")
+# csd <- readRDS(paste0("./data/NEON.DP4.00130.001_",queryRelease,".rds"))
 
 # Download RELEASED field discharge data ####
 dsc <-neonUtilities::loadByProduct(dpID="DP1.20048.001",
@@ -65,10 +65,10 @@ dsc <-neonUtilities::loadByProduct(dpID="DP1.20048.001",
                                    package='basic')
 
 # Save downloaded data as RDS for quicker access in future runs
-saveRDS(dsc,"./data/NEON.DP1.20048.001_RELEASED.rds")
+saveRDS(dsc,paste0("./data/NEON.DP1.20048.001_",queryRelease,".rds"))
 
 # If data is saved locally, read it in
-# dsc <- readRDS("./data/NEON.DP1.20048.001_RELEASED.rds")
+# dsc <- readRDS(paste0("./data/NEON.DP1.20048.001_",queryRelease,".rds"))
 
 # Unpack the modeled and field discharge data frames ####
 csd_15_min <- csd$csd_15_min
@@ -204,7 +204,7 @@ dsc_fieldData$plotLabel[
                              size=12, 
                              parse = TRUE)
 }
-ggplot2::ggsave("./out/discharge_fig.png",plot = qRelPlot,
+ggplot2::ggsave(paste0("./out/discharge_fig_",queryRelease,".png"),plot = qRelPlot,
                 width = 6.5,height = 8,units = "in",
                 dpi = 300)
 
@@ -251,10 +251,10 @@ geo <-neonUtilities::loadByProduct(dpID="DP4.00131.001",
                                    package='basic')
 
 # Save downloaded data as RDS for quicker access in future runs
-saveRDS(geo,"./data/NEON.DP4.00131.001_RELEASED.rds")
+saveRDS(geo,paste0("./data/NEON.DP4.00131.001_",queryRelease,".rds"))
 
 # If data is saved locally, read it in
-# geo <- readRDS("./data/NEON.DP4.00131.001_RELEASED.rds")
+# geo <- readRDS(paste0("./data/NEON.DP4.00131.001_",queryRelease,".rds"))
 
 # Assign the most recent slope value to each site ####
 geo_surveySummary <- geo$geo_surveySummary
@@ -282,10 +282,10 @@ sdrc <-neonUtilities::loadByProduct(dpID="DP4.00133.001",
                                     package='basic')
 
 # Save downloaded data as RDS for quicker access in future runs
-saveRDS(sdrc,"./data/NEON.DP4.00133.001_RELEASED.rds")
+saveRDS(sdrc,paste0("./data/NEON.DP4.00133.001_",queryRelease,".rds"))
 
 # If data is saved locally, read it in
-# sdrc <- readRDS("./data/NEON.DP4.00133.001_RELEASED.rds")
+# sdrc <- readRDS(paste0("./data/NEON.DP4.00133.001_",queryRelease,".rds"))
 
 # Assign the most recent slope value to each site ####
 sdrc_controlType <- sdrc$sdrc_controlType
@@ -344,6 +344,6 @@ summaryDF$watershedArea[summaryDF$siteID_loc=='FLNT'] <- 14999
 summaryDF$watershedArea[summaryDF$siteID_loc=='BLWA'] <- 16159
 
 # Write out the table ####
-write.csv(summaryDF,"out/discharge_table_v2.csv",row.names = F)
+write.csv(summaryDF,paste0("out/discharge_table_",queryRelease,".csv"),row.names = F)
 
 # End
