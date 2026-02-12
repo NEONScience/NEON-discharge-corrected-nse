@@ -5,7 +5,15 @@
 #' @author
 #' Zachary Nickerson \email{nickerson@battelleecology.org} \cr
 
-#' @description
+#' @description First, field and modeled discharge (15-min resolution) are 
+#' downloaded from the NEON Data Portal. Each field discharge value is mapped to
+#' the nearest modeled discharge timestamp. Plots are generated for each site
+#' showing the linear fit of field vs. modeled discharge, then stacked into a 
+#' single plot for output. Finally, an output table is generated that contains
+#' the following summary statistics for each site: Nash-Sutcliffe Efficiency 
+#' (NSE), slope of linear equation, coefficient of determination (R^2) of linear
+#' equation, the percent of the period of record that contains NULL modeled
+#' discharge, the channel slope of the site, and the watershed area of the site.
 
 #' @details
 #' Users should run this script within the .Rproj file in the root directory.
@@ -15,7 +23,8 @@
 #' Sys.setenv(NEON_PAT="YOUR PAT"). See instructions on obtaining a PAT at 
 #' https://www.neonscience.org/resources/learning-hub/tutorials/neon-api-tokens-tutorial 
 
-#' @return 
+#' @return NEON Portal downloads are saved as .rds to the /data subdirectory
+#' @return Output plot (.png) and table (.csv) are saved to the /out subdirectory
 
 # changelog and author contributions / copyrights
 #   Zachary Nickerson (2026-01-14)
@@ -24,7 +33,9 @@
 
 # Load libraries ####
 library(neonUtilities)
-library(tidyverse)
+library(scales)
+library(ggplot2)
+library(dplyr)
 library(hydroGOF)
 library(cowplot)
 
@@ -204,7 +215,8 @@ dsc_fieldData$plotLabel[
                              size=12, 
                              parse = TRUE)
 }
-ggplot2::ggsave(paste0("./out/discharge_fig_",queryRelease,".png"),plot = qRelPlot,
+ggplot2::ggsave(paste0("./out/discharge_fig_",queryRelease,".png"),
+                plot = qRelPlot,
                 width = 6.5,height = 8,units = "in",
                 dpi = 300)
 
