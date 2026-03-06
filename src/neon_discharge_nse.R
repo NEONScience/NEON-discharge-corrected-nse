@@ -46,7 +46,7 @@ options(stringsAsFactors=F)
 
 # Set constants ####
 queryStartDate <- "2021-10" # Beginning of WY 2022
-queryEndDate <- "2023-09" # End of WY 2024
+queryEndDate <- "2024-09" # End of WY 2024
 queryRelease <- "RELEASE-2026"
 
 # Create subdirectories if they do not exist ####
