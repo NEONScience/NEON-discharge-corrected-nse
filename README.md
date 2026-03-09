@@ -1,6 +1,6 @@
 # Calculate Nash-Sutcliffe Efficiencies (NSE) and Regression Coefficients for Corrected NEON Discharge Data
 
-Respository for the R script used to analyze data and generate the table and figure published in the manuscript 'Evaluation of streamflow estimates generated at aquatic sites across the National Ecological Observatory Network, Water Years 2022-2024' by Harrison et al. (submitted for publication on YYYY-MM-DD to _Limnology and Oceanography Letters_).
+Respository for the R script used to analyze data and generate the table and figure published in the manuscript 'Evaluation of streamflow estimates generated at aquatic sites across the National Ecological Observatory Network, Water Years 2022-2024' by Harrison et al. (submitted for publication in 2026 to _Limnology and Oceanography Letters_).
 
 ## Data Processing Script
 
