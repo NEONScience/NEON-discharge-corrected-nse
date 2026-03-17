@@ -28,6 +28,11 @@
 #' for the D07 WALK cross-section survey completed on 2022-09-15, the following
 #' script was referenced: 
 #' https://github.com/NEONScience/NEON-stream-discharge/blob/main/hydrologicControls/D07_WALK/WALK_controls_20220915.R
+#' 
+#' Installing BaM is required to model the posterior rating curve using NEON
+#' rating curve data downloaded from the NEON Data Portal. More information on
+#' installing and running BaM can be found here: 
+#' https://github.com/BaM-tools/BaM
 
 #' @return NEON Portal downloads are saved as .rds to the /data subdirectory
 #' @return Output plot (.png) is saved to the /out subdirectory
