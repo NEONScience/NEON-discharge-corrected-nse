@@ -35,11 +35,14 @@
 
 # Load libraries ####
 library(neonUtilities)
+library(geoNEON)
 library(scales)
 library(ggplot2)
 library(dplyr)
 library(hydroGOF)
 library(cowplot)
+library(httr)
+library(jsonlite)
 
 # Set options ####
 options(stringsAsFactors=F)
@@ -52,6 +55,7 @@ queryRelease <- "RELEASE-2026"
 # Create subdirectories if they do not exist ####
 if(!dir.exists("./data")){dir.create("./data")}
 if(!dir.exists("./out")){dir.create("./out")}
+if(!dir.exists("./ref")){dir.create("./ref")}
 
 # Download RELEASED modeled discharge data ####
 csd <-neonUtilities::loadByProduct(dpID="DP4.00130.001",
@@ -120,7 +124,7 @@ for(i in 1:nrow(dsc_fieldData)){
 
 # Plot of field vs. continuous discharge relationship for each location ####
 
-# Assign a plot label showing domain ID and location
+## Assign a plot label showing domain ID and location ####
 dsc_fieldData$plotLabel <- dsc_fieldData$siteID
 dsc_fieldData$plotLabel[
   dsc_fieldData$namedLocation=="TOOK.AOS.discharge.inflow"
@@ -134,7 +138,7 @@ dsc_fieldData$plotLabel[
 ],"OT",sep = "-")
 
 
-# Create a list to store individual plots
+## Create a list to store individual plots ####
 {
   plot_list <- list()
   dsc_fieldData$plotLabel <- gsub("^D[0-9]{2}\\-","",dsc_fieldData$plotLabel)
@@ -217,6 +221,8 @@ dsc_fieldData$plotLabel[
                              size=12, 
                              parse = TRUE)
 }
+
+## Write out the compiled plot ####
 ggplot2::ggsave(paste0("./out/discharge_fig_",queryRelease,".png"),
                 plot = qRelPlot,
                 width = 6.5,height = 8,units = "in",
@@ -236,6 +242,108 @@ summaryDF <- dsc_fieldData%>%
     R2=round(summary(lm(modeledQ~finalDischarge))$r.squared,
              digits=2)
   )
+
+# Calculate the percentage of data gaps for each site ####
+
+# For OKSR, TOOK-IN, and TOOK-OT, must read in active periods the denote periods
+# where sensors were physically removed from the stream during winter periods.
+# These active periods were not incorporated in time for RELEASE-2026, so must
+# be read in directly from the NEON geolocation database, accessible by querying
+# the NEON Data Portal API.
+
+## Build data frame history of OKSR and TOOK continuous discharge locations ####
+activePeriodLocs <- c("OKSR.AOS.continuous.discharge",
+                      "TOOK.AOS.continuous.discharge.inflow",
+                      "TOOK.AOS.continuous.discharge.outflow")
+activePeriodDFLocs <- data.frame(activatedDate=NA,
+                                 deactivatedDate=NA,
+                                 namedLocation=NA)
+### Query location from API and isolate active periods from JSON header ####
+for(a in 1:length(activePeriodLocs)){
+  locInfo <- httr::GET(
+    paste0("https://data.neonscience.org/api/v0/locations/",
+           activePeriodLocs[a])
+  )
+  locInfo <- httr::content(locInfo)
+  activePeriods <- locInfo$data$activePeriods
+
+  # Parse active periods into a data frame
+  activePeriodDF <- data.frame(
+    activatedDate = sapply(activePeriods, function(x) x$activatedDate),
+    deactivatedDate = sapply(activePeriods, function(x) x$deactivatedDate),
+    stringsAsFactors = FALSE
+  )
+  activePeriodDF$namedLocation <- activePeriodLocs[a]
+  activePeriodDFLocs <- rbind(activePeriodDFLocs,activePeriodDF)
+}
+activePeriodDFLocs <- activePeriodDFLocs[!is.na(activePeriodDFLocs[,1]),]
+
+### The queries above are not guaranteed to be static ####
+# Save reference .txt file for reproducibility
+write.table(activePeriodDFLocs,
+            paste0("./ref/OKSR_TOOK_dischargeActivePeriods_",
+                   format(Sys.Date(),"%Y%m%d"),
+                   ".txt"),
+            sep = "\t",
+            row.names = F)
+
+### For reproducible analysis, read in active period file saved in repo ####
+activePeriodDFLocs <- read.table(list.files("./ref",
+                                            "OKSR_TOOK.*txt",
+                                            full.names = T),
+                                 encoding = "UTF-8",
+                                 header=T)
+
+### Format active period dates for comparison ####
+activePeriodDFLocs$activatedDate <- as.POSIXct(
+  activePeriodDFLocs$activatedDate,
+  tz="UTC",
+  format="%Y-%m-%dT%H:%M:%SZ"
+)
+activePeriodDFLocs$deactivatedDate <- as.POSIXct(
+  activePeriodDFLocs$deactivatedDate,
+  tz="UTC",
+  format="%Y-%m-%dT%H:%M:%SZ"
+)
+
+### Subset out inactive periods at OSKR, TOOK-IN, TOOK-OT ####
+csd_15_min_subsetSites <- csd_15_min[csd_15_min$siteID%in%c("OKSR","TOOK"),]
+csd_15_min_subsetSites$activePeriodLoc <- NA
+csd_15_min_subsetSites$activePeriodLoc[
+  csd_15_min_subsetSites$siteID=="OKSR"
+] <- activePeriodLocs[1]
+csd_15_min_subsetSites$activePeriodLoc[
+  csd_15_min_subsetSites$siteID=="TOOK"
+  &csd_15_min_subsetSites$horizontalPosition=="150"
+] <- activePeriodLocs[2]
+csd_15_min_subsetSites$activePeriodLoc[
+  csd_15_min_subsetSites$siteID=="TOOK"
+  &csd_15_min_subsetSites$horizontalPosition=="160"
+] <- activePeriodLocs[3]
+csd_15_min_subsetSites$activeRecord <- NA
+for(r in 1:nrow(csd_15_min_subsetSites)){
+  currActive <- activePeriodDFLocs[
+    activePeriodDFLocs$namedLocation==csd_15_min_subsetSites$activePeriodLoc[r],
+  ]
+  for(a in 1:nrow(currActive)){
+    if(csd_15_min_subsetSites$startDateTime[r]>=currActive$activatedDate[a]
+       &csd_15_min_subsetSites$endDateTime[r]<currActive$deactivatedDate[a]){
+      csd_15_min_subsetSites$activeRecord[r] <- T
+    }
+  }
+}
+csd_15_min_subsetSites <- csd_15_min_subsetSites[
+  !is.na(csd_15_min_subsetSites$activeRecord),
+]
+csd_15_min_subsetSites$activePeriodLoc <- NULL
+csd_15_min_subsetSites$activeRecord <- NULL
+csd_15_min_subsetSites$inactivePeriodQF <- NULL
+
+### Re-join to a single table ####
+csd_15_min <- rbind(csd_15_min[!csd_15_min$siteID%in%c("OKSR","TOOK"),],
+                    csd_15_min_subsetSites)
+
+## Summarize data gaps ####
 summaryDF$perGap <- NA
 for(i in 1:nrow(summaryDF)){
   if(!grepl("TOOK",summaryDF$siteID_loc[i])){
@@ -251,13 +359,16 @@ for(i in 1:nrow(summaryDF)){
     sum(is.na(csd_15_min$dischargeContinuous[
       grepl(curveIDSite,csd_15_min$curveID)]))/
       nrow(csd_15_min[
-        grepl(curveIDSite,csd_15_min$curveID),])
-  ,digits = 2)
+        grepl(curveIDSite,csd_15_min$curveID),])*100
+  ,digits = 0)
 }
+
+## Get the total number of gaps for all sites across the period of record ####
+totalPerGap <- sum(is.na(csd_15_min$dischargeContinuous))/nrow(csd_15_min)*100
 
 # Add channel slope to each site ####
 
-# Download RELEASED morphology map data - stream sites ####
+## Download RELEASED morphology map data - stream sites ####
 geo <-neonUtilities::loadByProduct(dpID="DP4.00131.001",
                                    release=queryRelease,
                                    token=Sys.getenv("NEON_PAT"),
@@ -270,7 +381,7 @@ saveRDS(geo,paste0("./data/NEON.DP4.00131.001_",queryRelease,".rds"))
 # If data is saved locally, read it in
 # geo <- readRDS(paste0("./data/NEON.DP4.00131.001_",queryRelease,".rds"))
 
-# Assign the most recent slope value to each site ####
+## Assign the most recent slope value to each site ####
 geo_surveySummary <- geo$geo_surveySummary
 summaryDF$channelSlope <- NA
 for(i in 1:nrow(summaryDF)){
@@ -287,7 +398,7 @@ for(i in 1:nrow(summaryDF)){
   rm(maxDate)
 }
 
-# Download RELEASED rating curve data - river and lake sites only ####
+## Download RELEASED rating curve data - river and lake sites only ####
 sdrc <-neonUtilities::loadByProduct(dpID="DP4.00133.001",
                                     site = c("BLWA","FLNT","TOOK"),
                                     release=queryRelease,
@@ -301,7 +412,7 @@ saveRDS(sdrc,paste0("./data/NEON.DP4.00133.001_",queryRelease,".rds"))
 # If data is saved locally, read it in
 # sdrc <- readRDS(paste0("./data/NEON.DP4.00133.001_",queryRelease,".rds"))
 
-# Assign the most recent slope value to each site ####
+## Assign the most recent slope value to each site ####
 sdrc_controlType <- sdrc$sdrc_controlType
 sdrc_controlType$siteID_loc <- gsub("\\..*$","",sdrc_controlType$namedLocation)
 sdrc_controlType$siteID_loc[
@@ -358,6 +469,8 @@ summaryDF$watershedArea[summaryDF$siteID_loc=='FLNT'] <- 14999
 summaryDF$watershedArea[summaryDF$siteID_loc=='BLWA'] <- 16159
 
 # Write out the table ####
-write.csv(summaryDF,paste0("out/discharge_table_",queryRelease,".csv"),row.names = F)
+write.csv(summaryDF,
+          paste0("out/discharge_table_",queryRelease,".csv"),
+          row.names = F)
 
-# End
+# End ####
